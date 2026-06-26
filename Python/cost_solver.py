@@ -1,81 +1,85 @@
+# cost_solver.py
+
+
 class CostSolver:
+    """
+    CostSolver v2
 
-    def __init__(self, positive, negative):
+    Input:
+    - plan: danh sách kế hoạch phân bổ từ optimizer.py
+    - products: danh sách Product từ reader.py
 
-        self.positive = sorted(
-            positive,
-            key=lambda x: x.al,
-            reverse=True
-        )
+    Output:
+    - actions: danh sách hành động cuối cùng
+    """
 
-        self.negative = sorted(
-            negative,
-            key=lambda x: x.al
-        )
-
-        self.logs = []
+    def __init__(self, plan, products):
+        self.plan = plan
+        self.products = products
+        self.actions = []
 
     def solve(self):
+        self.actions = []
 
-        for neg in self.negative:
+        for row in self.plan:
+            status = row.get("status")
 
-            need = abs(neg.al)
+            ma_am = row.get("ma_am")
+            ma_nhan = row.get("ma_nhan")
+            amount = row.get("so_tien_chuyen", 0)
+            method = row.get("method", "")
 
-            for pos in self.positive:
+            if status == "PLANNED":
+                self.actions.append({
+                    "ma_am": ma_am,
+                    "ma_nhan": ma_nhan,
+                    "amount": amount,
+                    "action": "TRANSFER",
+                    "note": method
+                })
 
-                if pos.al <= 0:
-                    continue
+            elif status == "NEED_REDUCE_COST":
+                self.actions.append({
+                    "ma_am": ma_am,
+                    "ma_nhan": "",
+                    "amount": amount,
+                    "action": "REDUCE_COST",
+                    "note": "Không đủ mã nhận, giảm giá thành vừa đủ"
+                })
 
-                # TODO:
-                # Sau này thêm:
-                # - cùng khách hàng
-                # - loại TK5113
-                # - ĐVT
-                # - Toyo/Sato
+            elif status == "NO_RECEIVER":
+                al_am = row.get("al_am", 0)
 
-                move = min(need, pos.al)
+                self.actions.append({
+                    "ma_am": ma_am,
+                    "ma_nhan": "",
+                    "amount": abs(al_am),
+                    "action": "REDUCE_COST",
+                    "note": "Không có mã nhận phù hợp"
+                })
 
-                if move <= 0:
-                    continue
+        return self.actions
 
-                pos.al -= move
-                neg.al += move
+    def summary(self):
+        total_transfer = 0
+        total_reduce = 0
 
-                self.logs.append(
-                    (
-                        neg.ma_hang,
-                        pos.ma_hang,
-                        move
-                    )
-                )
+        for a in self.actions:
+            amount = a.get("amount", 0)
 
-                need = abs(neg.al)
+            if not isinstance(amount, (int, float)):
+                amount = 0
 
-                if neg.al >= 0:
-                    break
+            if a.get("action") == "TRANSFER":
+                total_transfer += amount
 
-    def report(self):
+            elif a.get("action") == "REDUCE_COST":
+                total_reduce += amount
 
         print()
         print("=" * 60)
-        print("TRANSFER LOG")
+        print("COST SOLVER SUMMARY")
         print("=" * 60)
-
-        for x in self.logs[:50]:
-
-            print(
-                f"{x[0]}  <=  {x[1]}   {x[2]:,.2f}"
-            )
-
-        print()
-
-        print("Âm còn lại:")
-
-        for p in self.negative:
-
-            if p.al < 0:
-
-                print(
-                    p.ma_hang,
-                    round(p.al,2)
-                )
+        print("Số hành động:", len(self.actions))
+        print("Tổng chuyển phân bổ:", round(total_transfer, 2))
+        print("Tổng cần giảm giá thành:", round(total_reduce, 2))
